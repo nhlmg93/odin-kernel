@@ -19,9 +19,9 @@ kernel_main :: proc "c" () {
 	uart_write_string("Triggering INT3\r\n")
 	x86_trigger_int3()
 	uart_write_string("Returned from INT3\r\n")
-	uart_write_string("Triggering UD2\r\n")
-	x86_trigger_ud2()
-	kernel_panic("UD2 returned unexpectedly")
+	uart_write_string("Triggering page fault\r\n")
+	x86_trigger_page_fault()
+	kernel_panic("page fault returned unexpectedly")
 
 	uart_write_string("CS: ")
 	uart_write_hex64(u64(x86_read_cs()))

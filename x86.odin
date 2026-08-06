@@ -14,4 +14,8 @@ foreign io {
 	x86_int3_stub :: proc "c" () ---
 	x86_trigger_ud2 :: proc "c" () ---
 	x86_ud2_stub :: proc "c" () ---
+	x86_read_cr2 :: proc "c" () -> u64 ---
+	x86_trigger_page_fault :: proc "c" () ---
+	x86_page_fault_stub :: proc "c" () ---
 }
+

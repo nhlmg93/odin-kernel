@@ -34,6 +34,7 @@ idt_set_gate :: proc "contextless" (vector: u8, handler: rawptr) {
 idt_init :: proc "contextless" () {
 	idt_set_gate(3, rawptr(x86_int3_stub))
 	idt_set_gate(6, rawptr(x86_ud2_stub))
+	idt_set_gate(14, rawptr(x86_page_fault_stub))
 
 	pointer := IDT_Pointer {
 		limit = u16(size_of(idt) - 1),
@@ -61,3 +62,52 @@ invalid_opcode_handler :: proc "c" (rip: u64) {
 #assert(size_of(IDT_Entry) == 16)
 #assert(size_of(IDT_Pointer) == 10)
 #assert(size_of(idt) == 4096)
+
+Exception_Frame :: struct #packed {
+	r15:        u64,
+	r14:        u64,
+	r13:        u64,
+	r12:        u64,
+	r11:        u64,
+	r10:        u64,
+	r9:         u64,
+	r8:         u64,
+	rdi:        u64,
+	rsi:        u64,
+	rbp:        u64,
+	rdx:        u64,
+	rcx:        u64,
+	rbx:        u64,
+	rax:        u64,
+	vector:     u64,
+	error_code: u64,
+	rip:        u64,
+	cs:         u64,
+	rflags:     u64,
+}
+
+@(export)
+exception_handler :: proc "c" (frame: ^Exception_Frame) {
+	uart_write_string("EXCEPTION vector: ")
+	uart_write_hex64(frame.vector)
+	uart_write_string(" RIP: ")
+	uart_write_hex64(frame.rip)
+	uart_write_string(" error: ")
+	uart_write_hex64(frame.error_code)
+
+	if frame.vector == 14 {
+		uart_write_string(" CR2: ")
+		uart_write_hex64(x86_read_cr2())
+	}
+
+	uart_write_string("\r\n")
+
+	if frame.vector == 3 {
+		return
+	}
+
+	x86_halt()
+}
+
+#assert(size_of(Exception_Frame) == 160)
+

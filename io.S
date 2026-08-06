@@ -80,28 +80,61 @@ x86_trigger_int3:
 	int3
 	ret
 
-.extern breakpoint_handler
-.global x86_int3_stub
-.type   x86_int3_stub, @function
+   .global x86_int3_stub
+   .type x86_int3_stub, @function
+   x86_int3_stub:
+      pushq $0
+      pushq $3
+      jmp x86_exception_common
 
-x86_int3_stub:
-	cld
+   .extern exception_handler
+   .global x86_exception_common
+   .type x86_exception_common, @function
+   x86_exception_common:
+      cld
 
-	// Preserve RBX and use it to remember the exception fram
-	pushq %rbx
-	movq  %rsp, %rbx
+      pushq %rax
+      pushq %rbx
+      pushq %rcx
+      pushq %rdx
+      pushq %rbp
+      pushq %rsi
+      pushq %rdi
+      pushq %r8
+      pushq %r9
+      pushq %r10
+      pushq %r11
+      pushq %r12
+      pushq %r13
+      pushq %r14
+      pushq %r15
 
-	// Saved RIP is now eight bytes above the saved RBX.
-	movq 8(%rbx), %rdi
+      /* RBX preserves the original frame across the C call. */
+      movq %rsp, %rbx
+      movq %rsp, %rdi
+      andq $-16, %rsp
+      call exception_handler
+      movq %rbx, %rsp
 
-	// Align the stack for the C calling convention.
-	andq $-16, %rsp
-	call breakpoint_handler
+      popq %r15
+      popq %r14
+      popq %r13
+      popq %r12
+      popq %r11
+      popq %r10
+      popq %r9
+      popq %r8
+      popq %rdi
+      popq %rsi
+      popq %rbp
+      popq %rdx
+      popq %rcx
+      popq %rbx
+      popq %rax
 
-	// Restore the CPU exception frame.
-	movq %rbx, %rsp
-	popq %rbx
-	iretq
+      /* Remove vector and normalized error code. */
+      addq $16, %rsp
+      iretq
 
    .global x86_trigger_ud2
    .type x86_trigger_ud2, @function
@@ -110,20 +143,31 @@ x86_trigger_ud2:
    ud2
    ret
 
-.extern invalid_opcode_handler
-.global x86_ud2_stub
-.type x86_ud2_stub, @function
+   .global x86_ud2_stub
+   .type x86_ud2_stub, @function
+   x86_ud2_stub:
+      pushq $0
+      pushq $6
+      jmp x86_exception_common
 
-x86_ud2_stub:
-   cld
-   movq (%rsp), %rdi
-   andq $-16, %rsp
-   call invalid_opcode_handler
+   .global x86_read_cr2
+   .type x86_read_cr2, @function
+   x86_read_cr2:
+      movq %cr2, %rax
+      ret
 
-   /* A UD2 fault must not return to the same instruction. */
-   cli
-1:
-   hlt
-   jmp 1b
+   .global x86_trigger_page_fault
+   .type x86_trigger_page_fault, @function
+   x86_trigger_page_fault:
+      movabsq $0x0000400000000000, %rax
+      movq (%rax), %rax
+      ret
+
+   .global x86_page_fault_stub
+   .type x86_page_fault_stub, @function
+   x86_page_fault_stub:
+      /* The CPU already pushed the error code. */
+      pushq $14
+      jmp x86_exception_common
 
 .section .note.GNU-stack, "", @progbits
