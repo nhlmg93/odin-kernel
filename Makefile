@@ -2,11 +2,12 @@ ODIN := odin
 BUILD_DIR := build
 TARGET := $(BUILD_DIR)/kernal
 ODIN_FLAGS := -target:freestanding_amd64_sysv \
-	  -build-mode:obj \
-	  -use-single-module \
-	  -no-thread-local \
-	  -disable-red-zone \
-	  -no-crt
+	-default-to-nil-allocator \
+	-build-mode:obj \
+	-use-single-module \
+	-no-thread-local \
+	-disable-red-zone \
+	-no-crt
 OBJECT := $(BUILD_DIR)/kernal.obj
 KERNEL := $(BUILD_DIR)/kernal.elf
 ISO_ROOT := $(BUILD_DIR)/iso-root
