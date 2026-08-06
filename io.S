@@ -16,4 +16,12 @@ x86_out8:
       inb %dx, %al
       ret
 
+.global x86_halt
+    .type x86_halt, @function
+    x86_halt:
+        cli
+    1:
+        hlt
+        jmp 1b
+
 .section .note.GNU-stack,"",@progbits
