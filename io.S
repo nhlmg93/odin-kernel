@@ -66,4 +66,64 @@ x86_load_gdt:
 1:
 	ret
 
+.global x86_load_idt
+.type   x86_load_idt, @function
+
+x86_load_idt:
+	lidt (%rdi)
+	ret
+
+.global x86_trigger_int3
+.type   x86_trigger_int3, @function
+
+x86_trigger_int3:
+	int3
+	ret
+
+.extern breakpoint_handler
+.global x86_int3_stub
+.type   x86_int3_stub, @function
+
+x86_int3_stub:
+	cld
+
+	// Preserve RBX and use it to remember the exception fram
+	pushq %rbx
+	movq  %rsp, %rbx
+
+	// Saved RIP is now eight bytes above the saved RBX.
+	movq 8(%rbx), %rdi
+
+	// Align the stack for the C calling convention.
+	andq $-16, %rsp
+	call breakpoint_handler
+
+	// Restore the CPU exception frame.
+	movq %rbx, %rsp
+	popq %rbx
+	iretq
+
+   .global x86_trigger_ud2
+   .type x86_trigger_ud2, @function
+
+x86_trigger_ud2:
+   ud2
+   ret
+
+.extern invalid_opcode_handler
+.global x86_ud2_stub
+.type x86_ud2_stub, @function
+
+x86_ud2_stub:
+   cld
+   movq (%rsp), %rdi
+   andq $-16, %rsp
+   call invalid_opcode_handler
+
+   /* A UD2 fault must not return to the same instruction. */
+   cli
+1:
+   hlt
+   jmp 1b
+
 .section .note.GNU-stack, "", @progbits
