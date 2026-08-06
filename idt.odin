@@ -17,13 +17,13 @@ IDT_Pointer :: struct #packed {
 
 idt: [256]IDT_Entry
 
-idt_set_gate :: proc "contextless" (vector: u8, handler: rawptr) {
+idt_set_gate :: proc "contextless" (vector: u8, handler: rawptr, ist_index: u8) {
 	address := u64(uintptr(handler))
 
 	idt[vector] = {
 		offset_low      = u16(address & 0xffff),
 		selector        = 0x08,
-		ist             = 0,
+		ist             = ist_index & 0x7,
 		type_attributes = 0x8e,
 		offset_middle   = u16((address >> 16) & 0xffff),
 		offset_high     = u32(address >> 32),
@@ -32,9 +32,10 @@ idt_set_gate :: proc "contextless" (vector: u8, handler: rawptr) {
 }
 
 idt_init :: proc "contextless" () {
-	idt_set_gate(3, rawptr(x86_int3_stub))
-	idt_set_gate(6, rawptr(x86_ud2_stub))
-	idt_set_gate(14, rawptr(x86_page_fault_stub))
+	idt_set_gate(3, rawptr(x86_int3_stub), 0)
+	idt_set_gate(6, rawptr(x86_ud2_stub), 0)
+	idt_set_gate(8, rawptr(x86_double_fault_stub), 1)
+	idt_set_gate(14, rawptr(x86_page_fault_stub), 0)
 
 	pointer := IDT_Pointer {
 		limit = u16(size_of(idt) - 1),
@@ -98,6 +99,12 @@ exception_handler :: proc "c" (frame: ^Exception_Frame) {
 	if frame.vector == 14 {
 		uart_write_string(" CR2: ")
 		uart_write_hex64(x86_read_cr2())
+		uart_write_string(" IST1: ")
+		if tss_emergency_stack_contains(uintptr(frame)) {
+			uart_write_string("yes")
+		} else {
+			uart_write_string("no")
+		}
 	}
 
 	uart_write_string("\r\n")
@@ -110,4 +117,3 @@ exception_handler :: proc "c" (frame: ^Exception_Frame) {
 }
 
 #assert(size_of(Exception_Frame) == 160)
-

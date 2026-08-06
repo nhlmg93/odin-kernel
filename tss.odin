@@ -50,3 +50,8 @@ tss_prepare :: proc "contextless" () {
 	gdt[4] = base >> 32
 }
 
+tss_emergency_stack_contains :: proc "contextless" (address: uintptr) -> bool {
+	bottom := uintptr(&emergency_stack.bytes[0])
+	top := bottom + uintptr(len(emergency_stack.bytes))
+	return address >= bottom && address < top
+}

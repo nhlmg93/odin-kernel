@@ -170,6 +170,13 @@ x86_trigger_ud2:
       pushq $14
       jmp x86_exception_common
 
+   .global x86_double_fault_stub
+   .type x86_double_fault_stub, @function
+   x86_double_fault_stub:
+      /* Vector 8 receives a CPU-pushed zero error code. */
+      pushq $8
+      jmp x86_exception_common
+
 
 .global x86_load_tss
 .type x86_load_tss, @function

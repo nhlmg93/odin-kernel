@@ -17,7 +17,7 @@ foreign io {
 	x86_read_cr2 :: proc "c" () -> u64 ---
 	x86_trigger_page_fault :: proc "c" () ---
 	x86_page_fault_stub :: proc "c" () ---
+	x86_double_fault_stub :: proc "c" () ---
 	x86_load_tss :: proc "c" (selector: u16) ---
 	x86_read_tr  :: proc "c" () -> u16 ---
 }
-
