@@ -33,10 +33,16 @@ uart_write_byte :: proc "contextless" (value: u8) {
 	x86_out8(COM1, value)
 }
 
+uart_write_string :: proc "contextless" (text: string) {
+	for i in 0 ..< len(text) {
+		uart_write_byte(text[i])
+	}
+}
+
 @(export)
 kernel_main :: proc "c" () {
 	if uart_init() {
-		uart_write_byte('K')
+		uart_write_string("Hello, World!\r\n")
 	}
 
 	for {}
