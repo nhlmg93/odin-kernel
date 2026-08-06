@@ -22,6 +22,12 @@ gdt_init :: proc "contextless" () {
 	}
 
 	x86_load_gdt(&pointer)
+
+	x86_load_tss(TSS_SELECTOR)
+
+	uart_write_string("TR: ")
+	uart_write_hex64(u64(x86_read_tr()))
+	uart_write_string("\r\n")
 }
 
 #assert(size_of(GDT_Pointer) == 10)

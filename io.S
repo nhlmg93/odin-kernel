@@ -170,4 +170,19 @@ x86_trigger_ud2:
       pushq $14
       jmp x86_exception_common
 
+
+.global x86_load_tss
+.type x86_load_tss, @function
+x86_load_tss:
+   movw %di, %ax
+   ltr %ax
+   ret
+
+.global x86_read_tr
+.type x86_read_tr, @function
+x86_read_tr:
+   xorl %eax, %eax
+   str %ax
+   ret
+
 .section .note.GNU-stack, "", @progbits
