@@ -39,10 +39,23 @@ uart_write_string :: proc "contextless" (text: string) {
 	}
 }
 
+uart_write_hex64 :: proc "contextless" (value: u64) {
+	digits := "0123456789abcdef"
+	uart_write_string("0x")
+
+	for nibble in 0 ..< 16 {
+		shift := u64((15 - nibble) * 4)
+		digit := (value >> shift) & 0xf
+		uart_write_byte(digits[digit])
+	}
+}
+
 @(export)
 kernel_main :: proc "c" () {
 	if uart_init() {
 		uart_write_string("Hello, World!\r\n")
+		uart_write_hex64(0x1234_abcd)
+		uart_write_string("\r\n")
 	}
 
 	for {}
