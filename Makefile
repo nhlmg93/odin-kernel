@@ -17,7 +17,7 @@ ISO := $(BUILD_DIR)/kernal$(ARTIFACT_SUFFIX).iso
 LIMINE_DIR := /usr/share/limine
 ASM_OBJECTS := $(BUILD_DIR)/io.o $(BUILD_DIR)/entry.o
 
-.PHONY: all object build iso run debug boot-test check fmt clean
+.PHONY: all object build iso run debug test boot-test verify check fmt clean
 
 all: build
 
@@ -81,8 +81,16 @@ debug: iso
 		 -S \
 		 -gdb tcp::1234
 
+test: $(ASM_OBJECTS)
+	$(ODIN) test .
+
 boot-test:
 	./scripts/boot-test.sh
+
+verify:
+	$(MAKE) check
+	$(MAKE) test
+	$(MAKE) boot-test
 
 check: $(ASM_OBJECTS)
 	$(ODIN) check . -target:freestanding_amd64_sysv -default-to-nil-allocator -no-thread-local -no-entry-point
