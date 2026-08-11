@@ -9,6 +9,15 @@ x86_out8:
 	outb %al, %dx
 	ret
 
+.global x86_out32
+.type   x86_out32, @function
+
+x86_out32:
+	movw %di, %dx
+	movl %esi, %eax
+	outl %eax, %dx
+	ret
+
 .global x86_in8
 .type   x86_in8, @function
 
@@ -146,6 +155,12 @@ x86_ud2_stub:
 .type x86_read_cr2, @function
 x86_read_cr2:
 	movq %cr2, %rax
+	ret
+
+.global x86_read_cr4
+.type x86_read_cr4, @function
+x86_read_cr4:
+	movq %cr4, %rax
 	ret
 
 .global x86_trigger_page_fault

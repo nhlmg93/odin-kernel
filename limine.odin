@@ -4,16 +4,18 @@ package main
 // Pinned protocol commit:
 // 4e1587972c148d43b2f397e4e5983bdd6c2a55a0
 
-LIMINE_BASE_REVISION                       :: u64(6)
-LIMINE_MEMORY_MAP_USABLE                   :: u64(0)
-LIMINE_MEMORY_MAP_RESERVED                 :: u64(1)
-LIMINE_MEMORY_MAP_ACPI_RECLAIMABLE         :: u64(2)
-LIMINE_MEMORY_MAP_ACPI_NVS                 :: u64(3)
-LIMINE_MEMORY_MAP_BAD_MEMORY               :: u64(4)
-LIMINE_MEMORY_MAP_BOOTLOADER_RECLAIMABLE   :: u64(5)
-LIMINE_MEMORY_MAP_EXECUTABLE_AND_MODULES   :: u64(6)
-LIMINE_MEMORY_MAP_FRAMEBUFFER              :: u64(7)
-LIMINE_PAGE_SIZE                           :: u64(4096)
+LIMINE_BASE_REVISION :: u64(6)
+LIMINE_MEMORY_MAP_USABLE :: u64(0)
+LIMINE_MEMORY_MAP_RESERVED :: u64(1)
+LIMINE_MEMORY_MAP_ACPI_RECLAIMABLE :: u64(2)
+LIMINE_MEMORY_MAP_ACPI_NVS :: u64(3)
+LIMINE_MEMORY_MAP_BAD_MEMORY :: u64(4)
+LIMINE_MEMORY_MAP_BOOTLOADER_RECLAIMABLE :: u64(5)
+LIMINE_MEMORY_MAP_EXECUTABLE_AND_MODULES :: u64(6)
+LIMINE_MEMORY_MAP_FRAMEBUFFER :: u64(7)
+LIMINE_MEMORY_MAP_RESERVED_MAPPED :: u64(8)
+LIMINE_MEMORY_MAP_ENTRY_COUNT_MAX :: u64(4096)
+LIMINE_PAGE_SIZE :: u64(4096)
 
 @(export, link_section = ".limine_requests_start")
 limine_requests_start: [4]u64 = {
@@ -81,7 +83,72 @@ limine_base_revision_supported :: proc "contextless" () -> bool {
 	return limine_base_revision[2] == 0
 }
 
-memory_map_validate_and_print :: proc "contextless" (memory_map: ^Memory_Map_Response) {
+Validated_Memory_Map :: struct {
+	response: ^Memory_Map_Response,
+}
+
+Memory_Map_Validation_Error :: enum {
+	None,
+	Nil_Response,
+	Nil_Entry_Array,
+	Entry_Count_Too_Large,
+	Nil_Entry,
+	Unsorted,
+	Range_Overflow,
+	Unknown_Kind,
+	Unaligned_Protected_Range,
+	Protected_Range_Overlap,
+}
+
+memory_map_kind_is_known :: proc "contextless" (kind: u64) -> bool {
+	return kind == LIMINE_MEMORY_MAP_USABLE ||
+	       kind == LIMINE_MEMORY_MAP_RESERVED ||
+	       kind == LIMINE_MEMORY_MAP_ACPI_RECLAIMABLE ||
+	       kind == LIMINE_MEMORY_MAP_ACPI_NVS ||
+	       kind == LIMINE_MEMORY_MAP_BAD_MEMORY ||
+	       kind == LIMINE_MEMORY_MAP_BOOTLOADER_RECLAIMABLE ||
+	       kind == LIMINE_MEMORY_MAP_EXECUTABLE_AND_MODULES ||
+	       kind == LIMINE_MEMORY_MAP_FRAMEBUFFER ||
+	       kind == LIMINE_MEMORY_MAP_RESERVED_MAPPED
+}
+
+memory_map_kind_is_protected :: proc "contextless" (kind: u64) -> bool {
+	return kind == LIMINE_MEMORY_MAP_USABLE ||
+	       kind == LIMINE_MEMORY_MAP_BOOTLOADER_RECLAIMABLE
+}
+
+memory_map_entry_is_page_aligned :: proc "contextless" (entry: ^Memory_Map_Entry) -> bool {
+	return entry.base % LIMINE_PAGE_SIZE == 0 && entry.length % LIMINE_PAGE_SIZE == 0
+}
+
+memory_map_entry_overlaps_protected_range :: proc "contextless" (
+	entry: ^Memory_Map_Entry,
+	max_prior_end: u64,
+	max_prior_protected_end: u64,
+) -> bool {
+	if memory_map_kind_is_protected(entry.kind) {
+		return entry.base < max_prior_end
+	}
+	return entry.base < max_prior_protected_end
+}
+
+memory_map_validate :: proc "contextless" (
+	memory_map: ^Memory_Map_Response,
+) -> (
+	Validated_Memory_Map,
+	Memory_Map_Validation_Error,
+	u64,
+) {
+	if memory_map == nil {
+		return {}, .Nil_Response, 0
+	}
+	if memory_map.entry_count > LIMINE_MEMORY_MAP_ENTRY_COUNT_MAX {
+		return {}, .Entry_Count_Too_Large, 0
+	}
+	if memory_map.entry_count != 0 && memory_map.entries == nil {
+		return {}, .Nil_Entry_Array, 0
+	}
+
 	has_prior := false
 	prior_base: u64 = 0
 	max_prior_end: u64 = 0
@@ -89,53 +156,40 @@ memory_map_validate_and_print :: proc "contextless" (memory_map: ^Memory_Map_Res
 	for index in 0 ..< memory_map.entry_count {
 		entry := memory_map.entries[index]
 		if entry == nil {
-			kernel_panic("nil memory map entry")
+			return {}, .Nil_Entry, index
 		}
 		if has_prior && entry.base < prior_base {
-			kernel_panic("memory map entries are not sorted")
+			return {}, .Unsorted, index
 		}
 		if entry.length > max(u64) - entry.base {
-			kernel_panic("memory map entry range overflows")
+			return {}, .Range_Overflow, index
 		}
-		if entry.kind != LIMINE_MEMORY_MAP_USABLE &&
-		   entry.kind != LIMINE_MEMORY_MAP_RESERVED &&
-		   entry.kind != LIMINE_MEMORY_MAP_ACPI_RECLAIMABLE &&
-		   entry.kind != LIMINE_MEMORY_MAP_ACPI_NVS &&
-		   entry.kind != LIMINE_MEMORY_MAP_BAD_MEMORY &&
-		   entry.kind != LIMINE_MEMORY_MAP_BOOTLOADER_RECLAIMABLE &&
-		   entry.kind != LIMINE_MEMORY_MAP_EXECUTABLE_AND_MODULES &&
-		   entry.kind != LIMINE_MEMORY_MAP_FRAMEBUFFER {
-			kernel_panic("unknown memory map entry kind")
+		if !memory_map_kind_is_known(entry.kind) {
+			return {}, .Unknown_Kind, index
 		}
-		protected_kind := entry.kind == LIMINE_MEMORY_MAP_USABLE || entry.kind == LIMINE_MEMORY_MAP_BOOTLOADER_RECLAIMABLE
-		if protected_kind && (entry.base % LIMINE_PAGE_SIZE != 0 || entry.length % LIMINE_PAGE_SIZE != 0) {
-			kernel_panic("memory map entry is not page-aligned")
+		is_protected := memory_map_kind_is_protected(entry.kind)
+		if is_protected && !memory_map_entry_is_page_aligned(entry) {
+			return {}, .Unaligned_Protected_Range, index
 		}
 		if entry.length != 0 {
 			entry_end := entry.base + entry.length
-			if protected_kind {
-				if entry.base < max_prior_end {
-					kernel_panic("memory map protected range overlaps another entry")
-				}
-			} else if entry.base < max_prior_protected_end {
-				kernel_panic("memory map protected range overlaps another entry")
+			if memory_map_entry_overlaps_protected_range(
+				entry,
+				max_prior_end,
+				max_prior_protected_end,
+			) {
+				return {}, .Protected_Range_Overlap, index
 			}
 			if entry_end > max_prior_end {
 				max_prior_end = entry_end
 			}
-			if protected_kind && entry_end > max_prior_protected_end {
+			if is_protected && entry_end > max_prior_protected_end {
 				max_prior_protected_end = entry_end
 			}
 		}
 		has_prior = true
 		prior_base = entry.base
-
-		uart_write_string("MEM base=")
-		uart_write_hex64(entry.base)
-		uart_write_string(" length=")
-		uart_write_hex64(entry.length)
-		uart_write_string(" kind=")
-		uart_write_hex64(entry.kind)
-		uart_write_string("\r\n")
 	}
+
+	return {response = memory_map}, .None, 0
 }
