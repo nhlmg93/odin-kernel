@@ -4,7 +4,16 @@ package main
 // Pinned protocol commit:
 // 4e1587972c148d43b2f397e4e5983bdd6c2a55a0
 
-LIMINE_BASE_REVISION :: u64(6)
+LIMINE_BASE_REVISION                       :: u64(6)
+LIMINE_MEMORY_MAP_USABLE                   :: u64(0)
+LIMINE_MEMORY_MAP_RESERVED                 :: u64(1)
+LIMINE_MEMORY_MAP_ACPI_RECLAIMABLE         :: u64(2)
+LIMINE_MEMORY_MAP_ACPI_NVS                 :: u64(3)
+LIMINE_MEMORY_MAP_BAD_MEMORY               :: u64(4)
+LIMINE_MEMORY_MAP_BOOTLOADER_RECLAIMABLE   :: u64(5)
+LIMINE_MEMORY_MAP_EXECUTABLE_AND_MODULES   :: u64(6)
+LIMINE_MEMORY_MAP_FRAMEBUFFER              :: u64(7)
+LIMINE_PAGE_SIZE                           :: u64(4096)
 
 @(export, link_section = ".limine_requests_start")
 limine_requests_start: [4]u64 = {
@@ -72,12 +81,54 @@ limine_base_revision_supported :: proc "contextless" () -> bool {
 	return limine_base_revision[2] == 0
 }
 
-memory_map_print :: proc "contextless" (memory_map: ^Memory_Map_Response) {
+memory_map_validate_and_print :: proc "contextless" (memory_map: ^Memory_Map_Response) {
+	has_prior := false
+	prior_base: u64 = 0
+	max_prior_end: u64 = 0
+	max_prior_protected_end: u64 = 0
 	for index in 0 ..< memory_map.entry_count {
 		entry := memory_map.entries[index]
 		if entry == nil {
 			kernel_panic("nil memory map entry")
 		}
+		if has_prior && entry.base < prior_base {
+			kernel_panic("memory map entries are not sorted")
+		}
+		if entry.length > max(u64) - entry.base {
+			kernel_panic("memory map entry range overflows")
+		}
+		if entry.kind != LIMINE_MEMORY_MAP_USABLE &&
+		   entry.kind != LIMINE_MEMORY_MAP_RESERVED &&
+		   entry.kind != LIMINE_MEMORY_MAP_ACPI_RECLAIMABLE &&
+		   entry.kind != LIMINE_MEMORY_MAP_ACPI_NVS &&
+		   entry.kind != LIMINE_MEMORY_MAP_BAD_MEMORY &&
+		   entry.kind != LIMINE_MEMORY_MAP_BOOTLOADER_RECLAIMABLE &&
+		   entry.kind != LIMINE_MEMORY_MAP_EXECUTABLE_AND_MODULES &&
+		   entry.kind != LIMINE_MEMORY_MAP_FRAMEBUFFER {
+			kernel_panic("unknown memory map entry kind")
+		}
+		protected_kind := entry.kind == LIMINE_MEMORY_MAP_USABLE || entry.kind == LIMINE_MEMORY_MAP_BOOTLOADER_RECLAIMABLE
+		if protected_kind && (entry.base % LIMINE_PAGE_SIZE != 0 || entry.length % LIMINE_PAGE_SIZE != 0) {
+			kernel_panic("memory map entry is not page-aligned")
+		}
+		if entry.length != 0 {
+			entry_end := entry.base + entry.length
+			if protected_kind {
+				if entry.base < max_prior_end {
+					kernel_panic("memory map protected range overlaps another entry")
+				}
+			} else if entry.base < max_prior_protected_end {
+				kernel_panic("memory map protected range overlaps another entry")
+			}
+			if entry_end > max_prior_end {
+				max_prior_end = entry_end
+			}
+			if protected_kind && entry_end > max_prior_protected_end {
+				max_prior_protected_end = entry_end
+			}
+		}
+		has_prior = true
+		prior_base = entry.base
 
 		uart_write_string("MEM base=")
 		uart_write_hex64(entry.base)
@@ -88,4 +139,3 @@ memory_map_print :: proc "contextless" (memory_map: ^Memory_Map_Response) {
 		uart_write_string("\r\n")
 	}
 }
-

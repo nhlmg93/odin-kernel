@@ -39,7 +39,7 @@ kernel_main :: proc "c" () {
 	uart_write_hex64(memory_map.entry_count)
 	uart_write_string("\r\n")
 
-	memory_map_print(memory_map)
+	memory_map_validate_and_print(memory_map)
 
 	gdt_init()
 	idt_init()
