@@ -80,102 +80,94 @@ x86_trigger_int3:
 	int3
 	ret
 
-   .global x86_int3_stub
-   .type x86_int3_stub, @function
-   x86_int3_stub:
-      pushq $0
-      pushq $3
-      jmp x86_exception_common
+.global x86_int3_stub
+.type x86_int3_stub, @function
+x86_int3_stub:
+	pushq $0
+	pushq $3
+	jmp x86_exception_common
 
-   .extern exception_handler
-   .global x86_exception_common
-   .type x86_exception_common, @function
-   x86_exception_common:
-      cld
+.extern exception_handler
+.global x86_exception_common
+.type x86_exception_common, @function
+x86_exception_common:
+	cld
 
-      pushq %rax
-      pushq %rbx
-      pushq %rcx
-      pushq %rdx
-      pushq %rbp
-      pushq %rsi
-      pushq %rdi
-      pushq %r8
-      pushq %r9
-      pushq %r10
-      pushq %r11
-      pushq %r12
-      pushq %r13
-      pushq %r14
-      pushq %r15
+	pushq %rax
+	pushq %rbx
+	pushq %rcx
+	pushq %rdx
+	pushq %rbp
+	pushq %rsi
+	pushq %rdi
+	pushq %r8
+	pushq %r9
+	pushq %r10
+	pushq %r11
+	pushq %r12
+	pushq %r13
+	pushq %r14
+	pushq %r15
 
-      /* RBX preserves the original frame across the C call. */
-      movq %rsp, %rbx
-      movq %rsp, %rdi
-      andq $-16, %rsp
-      call exception_handler
-      movq %rbx, %rsp
+	/* RBX preserves the original frame across the C call. */
+	movq %rsp, %rbx
+	movq %rsp, %rdi
+	andq $-16, %rsp
+	call exception_handler
+	movq %rbx, %rsp
 
-      popq %r15
-      popq %r14
-      popq %r13
-      popq %r12
-      popq %r11
-      popq %r10
-      popq %r9
-      popq %r8
-      popq %rdi
-      popq %rsi
-      popq %rbp
-      popq %rdx
-      popq %rcx
-      popq %rbx
-      popq %rax
+	popq %r15
+	popq %r14
+	popq %r13
+	popq %r12
+	popq %r11
+	popq %r10
+	popq %r9
+	popq %r8
+	popq %rdi
+	popq %rsi
+	popq %rbp
+	popq %rdx
+	popq %rcx
+	popq %rbx
+	popq %rax
 
-      /* Remove vector and normalized error code. */
-      addq $16, %rsp
-      iretq
+	/* Remove vector and normalized error code. */
+	addq $16, %rsp
+	iretq
+.global x86_ud2_stub
+.type x86_ud2_stub, @function
+x86_ud2_stub:
+	pushq $0
+	pushq $6
+	jmp x86_exception_common
 
-   .global x86_trigger_ud2
-   .type x86_trigger_ud2, @function
+.global x86_read_cr2
+.type x86_read_cr2, @function
+x86_read_cr2:
+	movq %cr2, %rax
+	ret
 
-x86_trigger_ud2:
-   ud2
-   ret
+.global x86_trigger_page_fault
+.type x86_trigger_page_fault, @function
+x86_trigger_page_fault:
+	movabsq $0x0000400000000000, %rax
+	movq (%rax), %rax
+	ret
 
-   .global x86_ud2_stub
-   .type x86_ud2_stub, @function
-   x86_ud2_stub:
-      pushq $0
-      pushq $6
-      jmp x86_exception_common
+.global x86_page_fault_stub
+.type x86_page_fault_stub, @function
+x86_page_fault_stub:
+	/* The CPU already pushed the error code. */
+	pushq $14
+	jmp x86_exception_common
 
-   .global x86_read_cr2
-   .type x86_read_cr2, @function
-   x86_read_cr2:
-      movq %cr2, %rax
-      ret
-
-   .global x86_trigger_page_fault
-   .type x86_trigger_page_fault, @function
-   x86_trigger_page_fault:
-      movabsq $0x0000400000000000, %rax
-      movq (%rax), %rax
-      ret
-
-   .global x86_page_fault_stub
-   .type x86_page_fault_stub, @function
-   x86_page_fault_stub:
-      /* The CPU already pushed the error code. */
-      pushq $14
-      jmp x86_exception_common
-
-   .global x86_double_fault_stub
-   .type x86_double_fault_stub, @function
-   x86_double_fault_stub:
-      /* Vector 8 receives a CPU-pushed zero error code. */
-      pushq $8
-      jmp x86_exception_common
+.global x86_double_fault_stub
+.type x86_double_fault_stub, @function
+x86_double_fault_stub:
+	/* Vector 8 receives a CPU-pushed zero error code. */
+	pushq $8
+	jmp x86_exception_common
 
 
 .global x86_load_tss

@@ -34,9 +34,12 @@ kernel_main :: proc "c" () {
 		kernel_panic("Limine memory map has no entry array")
 	}
 
+
 	uart_write_string("Memory map entries: ")
 	uart_write_hex64(memory_map.entry_count)
 	uart_write_string("\r\n")
+
+	memory_map_print(memory_map)
 
 	gdt_init()
 	idt_init()
@@ -55,3 +58,4 @@ kernel_main :: proc "c" () {
 	uart_write_string("\r\n")
 	x86_halt()
 }
+
